@@ -32,18 +32,22 @@ solenoid = LED(17)  # Use the GPIO pin number (e.g., 17 for the example)
 #start with solenoid in off position (valve should be set up for off=up position)
 solenoid.off()
 
-time.sleep(.5)
-print("solenoid on...")
-solenoid.on()
-time.sleep(.5)
-print("solenoid off...")
-solenoid.off()
-time.sleep(.5)
-print("solenoid on...")
-solenoid.on()
-time.sleep(.5)
-print("solenoid off...")
-solenoid.off()
+while(True):
+    
+    time.sleep(10.0);
+    print("solenoid on...")
+    solenoid.on()
+    time.sleep(10)
+    print("solenoid off...")
+    solenoid.off()
+    time.sleep(10)
+    print("solenoid on...")
+    solenoid.on()
+    time.sleep(10)
+    print("solenoid off...")
+    solenoid.off()
+
+exit()
 
 # ?? common logging method
 def log(method, text):
