@@ -20,14 +20,14 @@ from gpiozero import LED
 ######################################################
 # GLOBAL SETTINGS AND CONSTANTS
 ######################################################
-debugCameraThread = False;
+debugCameraThread = True;
 debugVoiceThread = False;
 # shared variable across threads indicating camera finding face
 facePresent = False
 # URL of TTS server
-TTS_SERVER = "http://10.0.0.114:5002"  # Replace with IP address where TTS server is running
+TTS_SERVER = "http://10.0.0.148:5002"  # Replace with IP address where TTS server is running
 #ChatGPT base prompt
-messages_base = [{"role": "system", "content": "You are an ancient creature from another dimension.  Your name is Faydekin. You are a guardian of space-time - this is your job and what you do. You are wearing a black outfit with silver armor and you have a staff in your right hand with an artifact at the top that looks like a blue diamond inside a clear globe. Speak with eerie, cryptic wisdom using language a twelve year old can understand. Be unsettling but not violent. Limit your response to two or three sentences.  Ensure your response relates to the user's prompt.  If the user says hello you should respond with something including a hello back.  If they ask for a joke or riddle, tell them one. If they ask about candy, tell them that candy can be found at the door to the right, but beware of dangers and stay on the path.  It is Halloween night and you are part of a haunted house.  The haunted house has vampires, scarecrows, ghosts, banshees, and other monsters.  You can share that knowledge in your responses but do not list all of them at once unless asked."}]
+messages_base = [{"role": "system", "content": "You are an ancient creature from another dimension.  Your name is Faydekin. You are a guardian of space-time - this is your job and what you do. You are wearing a black outfit with silver armor and you have a staff in your right hand with an artifact at the top that looks like a blue diamond inside a clear globe. Speak with eerie, cryptic wisdom using language a twelve year old can understand. Be unsettling but not violent. Limit your response to two or three sentences.  Ensure your response relates to the user's prompt.  If the user says hello you should respond with something including a hello back.  If they ask for a joke or riddle, tell them one. If they ask about candy, tell them that candy can be found at the door down the dark corridor to the left, but beware of dangers and stay on the path.  It is Halloween night and you are part of a haunted house.  The haunted house has vampires, scarecrows, ghosts, banshees, witches, and other monsters.  You can share that knowledge in your responses but do not list all of them at once unless asked."}]
 messages = []
 #define GPIO pin for triggering the solenoid - then can use solenoid.on() and solenoid.off()
 solenoid = LED(17, active_high=True)  # Use the GPIO pin number (e.g., 17 for the example)
@@ -41,7 +41,7 @@ speaker_id = 'p234'  # Try others too (10=p234?)
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 #print(os.environ.get("OPENAI_API_KEY"))
 defaultPanAngle = 90
-defaultTiltAngle = 100
+defaultTiltAngle = 110
 # SERVO MOTION SETTINGS
 # 'max_angle_change' caps how far a single angle jump in servo motion can be.  Generally following a
 #	a face does not need movements more than 2 degrees at a time, and setting this helps to avoid
@@ -208,6 +208,10 @@ def speakingTask():
     
     if debugVoiceThread: log("speakingTask", "Entering function...")
         
+    #prepping fixed responses
+    translating_raw_wav = generate_speech_tts_server("Translating...")
+    translating_processed_wav = process_audio(translating_raw_wav, pitch_shift=-3.0)
+                    
     #loop infinitely...
     while True:
         try:
@@ -226,6 +230,10 @@ def speakingTask():
                     response = ask_gpt(user_input)
                     #speak(response)
     #                raw_wav = generate_speech(response)
+                    
+                    #prep user for delay...
+                    play_audio(translating_processed_wav)
+                    
                     raw_wav = generate_speech_tts_server(response)
                     processed_wav = process_audio(raw_wav, pitch_shift=-3.0)
                     play_audio(processed_wav)
@@ -289,146 +297,168 @@ def cameraEyeMovementTask():
     if debugCameraThread: log("cameraEyeMovementTask", "Beginning infinite loop...")
     #loop infinitely...
     while True:
+
         try:
-            ret, frame = cap.read()
-            if not ret:
-                break
+            if cap.isOpened():
+                #camera is captured now let's grab a frame...
+                ret, frame = cap.read()
                 
+#                cv2.imshow('Face Tracking', frame)
 
-            # Convert to grayscale (Haar works on gray images)
-            #if debugCameraThread: log("cameraEyeMovementTask", "converting to grayscale.")
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if ret:
+                    #we got a frame so it is ok to continue - if we didn't then the loop would re-attempt
+                    
+                    # Show the frame - this will show even with no face present (helps debug and focus camera)
+                    #if debugCameraThread: log("cameraEyeMovementTask", "showing image")
+                    #cv2.imshow('Face Tracking', frame)
+                    #cv2.waitKey(1) #NOTE: this line is required to finalize showing the frame - don't know why
+                    
+                    # Convert to grayscale (Haar works on gray images)
+                    #if debugCameraThread: log("cameraEyeMovementTask", "converting to grayscale.")
+                    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # Detect faces
-            #if debugCameraThread: log("cameraEyeMovementTask", "detecting faces")
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+                    # Detect faces
+                    #if debugCameraThread: log("cameraEyeMovementTask", "detecting faces")
+                    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-            # Draw rectangles around all faces
+                    # Draw rectangles around all faces
+                    '''
+                    print("draw")
+                    for (x, y, w, h) in faces:
+                        center_x = x + w // 2
+                        center_y = y + h // 2
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                        cv2.circle(frame, (center_x, center_y), 5, (0, 255, 0), -1)
             '''
-            print("draw")
-            for (x, y, w, h) in faces:
-                center_x = x + w // 2
-                center_y = y + h // 2
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                cv2.circle(frame, (center_x, center_y), 5, (0, 255, 0), -1)
-    '''
 
-            # Initialize variables
-            largest_face = None
-            max_area = 0
+                    # Initialize variables
+                    largest_face = None
+                    max_area = 0
 
-            # Find the largest face
-            #if debugCameraThread: log("cameraEyeMovementTask", "finding largest face")
-            for (x, y, w, h) in faces:
-                area = w * h
-                if area > max_area:
-                    max_area = area
-                    largest_face = (x, y, w, h)
+                    # Find the largest face
+                    #if debugCameraThread: log("cameraEyeMovementTask", "finding largest face")
+                    for (x, y, w, h) in faces:
+                        area = w * h
+                        if area > max_area:
+                            max_area = area
+                            largest_face = (x, y, w, h)
 
-            # Show the frame - this will show even with no face present (helps debug and focus camera)
-            #if debugCameraThread: log("cameraEyeMovementTask", "showing image")
-            cv2.imshow('Face Tracking', frame)
-                
-            # If a face is found, process it
-            if largest_face is not None:
-                
-                #indicate face is present so other threads know
-                facePresent = True
-                timeLastFacePresent = datetime.datetime.now()
-                
-                #if debugCameraThread: log("cameraEyeMovementTask", "face found = processing it...")
-                x, y, w, h = largest_face
-                face_center_x = x + w // 2
-                face_center_y = y + h // 2
+                        
+                    # If a face is found, process it
+                    if largest_face is not None:
+                        
+                        #indicate face is present so other threads know
+                        facePresent = True
+                        timeLastFacePresent = datetime.datetime.now()
+                        
+                        #if debugCameraThread: log("cameraEyeMovementTask", "face found = processing it...")
+                        x, y, w, h = largest_face
+                        face_center_x = x + w // 2
+                        face_center_y = y + h // 2
 
-                # Draw rectangle and center point
-                #if debugCameraThread: log("cameraEyeMovementTask", "draw rectangle around and circle center")
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                cv2.circle(frame, (face_center_x, face_center_y), 5, (0, 255, 0), -1)
+                        # Draw rectangle and center point
+                        #if debugCameraThread: log("cameraEyeMovementTask", "draw rectangle around and circle center")
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                        cv2.circle(frame, (face_center_x, face_center_y), 5, (0, 255, 0), -1)
 
-                # Show the frame
-                #if debugCameraThread: log("cameraEyeMovementTask", "showing image")
-                cv2.imshow('Face Tracking', frame)
+                        # Show the frame
+                        #if debugCameraThread: log("cameraEyeMovementTask", "showing image")
+                        cv2.imshow('Face Tracking', frame)
+                        cv2.waitKey(1)
 
-                # Calculate frame center
-                frame_center_x = frame.shape[1] // 2
-                frame_center_y = frame.shape[0] // 2
+                        # Calculate frame center
+                        frame_center_x = frame.shape[1] // 2
+                        frame_center_y = frame.shape[0] // 2
 
-                # Calculate offset of center of face from center of frame (can use this to move servos later)
-                offset_x = face_center_x - frame_center_x
-                offset_y = face_center_y - frame_center_y
+                        # Calculate offset of center of face from center of frame (can use this to move servos later)
+                        offset_x = face_center_x - frame_center_x
+                        offset_y = face_center_y - frame_center_y
 
-                #if debugCameraThread: log("cameraEyeMovementTask", f"Face offset: X={offset_x}, Y={offset_y}")
+                        #if debugCameraThread: log("cameraEyeMovementTask", f"Face offset: X={offset_x}, Y={offset_y}")
 
 
-                # Normalize offset (based on frame size)
-                frame_width = frame.shape[1]
-                frame_height = frame.shape[0]
-                #if debugCameraThread: log("cameraEyeMovementTask", f"Frame size: Width(max X)={frame_width}, Height(max Y)={frame_height}")
+                        # Normalize offset (based on frame size)
+                        frame_width = frame.shape[1]
+                        frame_height = frame.shape[0]
+                        #if debugCameraThread: log("cameraEyeMovementTask", f"Frame size: Width(max X)={frame_width}, Height(max Y)={frame_height}")
 
-                norm_x = offset_x / frame_width # norm_x = the % of frame width to center of face
-                norm_y = offset_y / frame_height
+                        norm_x = offset_x / frame_width # norm_x = the % of frame width to center of face
+                        norm_y = offset_y / frame_height
 
-                # Compute angle adjustments - using 'sensitivity' as a dampener
-                # norm_x and norm_y are the percent across the frame needed to move to center face
-                # if we multiply that by that percent by the field of view angle (number of degrees in
-                # a frame seen by the camera) that tells us how many degrees to move
-                # the 'sensitivity' helps avoid jitter - the calculation and motion isn't perfect so if
-                # we try to always jump exactly we get a jitter movement, the sensitivity knocks small
-                # changes down to no change
-                delta_pan = -norm_x * 120 * sensitivity
-                delta_tilt = -norm_y * 120 * sensitivity
-                #if debugCameraThread: log("cameraEyeMovementTask", f"Deltas before limits: delta_pan={delta_pan}, delta_tilt={delta_tilt}")
+                        # Compute angle adjustments - using 'sensitivity' as a dampener
+                        # norm_x and norm_y are the percent across the frame needed to move to center face
+                        # if we multiply that by that percent by the field of view angle (number of degrees in
+                        # a frame seen by the camera) that tells us how many degrees to move
+                        # the 'sensitivity' helps avoid jitter - the calculation and motion isn't perfect so if
+                        # we try to always jump exactly we get a jitter movement, the sensitivity knocks small
+                        # changes down to no change
+                        delta_pan = -norm_x * 120 * sensitivity
+                        delta_tilt = -norm_y * 120 * sensitivity
+                        #if debugCameraThread: log("cameraEyeMovementTask", f"Deltas before limits: delta_pan={delta_pan}, delta_tilt={delta_tilt}")
 
-                # Do not allow jumps greater than max_angle_change
-                delta_pan = max(-max_angle_change, min(max_angle_change, delta_pan))
-                delta_tilt = max(-max_angle_change, min(max_angle_change, delta_tilt))
+                        # Do not allow jumps greater than max_angle_change
+                        delta_pan = max(-max_angle_change, min(max_angle_change, delta_pan))
+                        delta_tilt = max(-max_angle_change, min(max_angle_change, delta_tilt))
 
-                # Update angles
-                pan_angle += delta_pan
-                tilt_angle += delta_tilt
+                        # Update angles
+                        pan_angle += delta_pan
+                        tilt_angle += delta_tilt
 
-                # Do not allow angles to exceed desired servo range
+                        # Do not allow angles to exceed desired servo range
 
-                pan_angle = max(min_pan_angle, min(max_pan_angle, pan_angle))
-                tilt_angle = max(min_tilt_angle, min(max_tilt_angle, tilt_angle))
+                        pan_angle = max(min_pan_angle, min(max_pan_angle, pan_angle))
+                        tilt_angle = max(min_tilt_angle, min(max_tilt_angle, tilt_angle))
+                        if(not isBodyRaised()):
+                            tilt_angle = max(90, min(max_tilt_angle, tilt_angle))
+                        else:
+                            tilt_angle = max(min_tilt_angle, min(max_tilt_angle, tilt_angle))
 
-                # Move servos
-                if debugCameraThread: log("cameraEyeMovementTask", "pan_angle: " + str(pan_angle) + " tilt_angle: " + str(tilt_angle))
-                kit.servo[pan_channel].angle = pan_angle
-                kit.servo[tilt_channel].angle = tilt_angle
-                
-                log("cameraEyeMovementTask", "Checking Raise/Lower: Raised? " + str(isBodyRaised()) + " tilt_angle: " + str(tilt_angle))
-                if(isBodyRaised() and tilt_angle < 92):
-                    tilt_angle += 15
-                    log("cameraEyeMovementTask", "Lowering body... tilt_angle going to: " + str(tilt_angle))
-                    kit.servo[tilt_channel].angle = tilt_angle
-                    time.sleep(0.0)
-                    log("cameraEyeMovementTask", "completed servo call...")
-                    lowerBody()
-                    log("cameraEyeMovementTask", "completed lowerBody() call...")
-                if(not isBodyRaised() and tilt_angle >125):
-                    log("cameraEyeMovementTask", "Raising body... pan_angle going to: " + str(pan_angle))
-                    raiseBody()
-                time.sleep(0.001) #time between adjustments - .01 makes movement smooth, high values can make movement jumpy
+                        # Move servos
+        #                if debugCameraThread: log("cameraEyeMovementTask", "pan_angle: " + str(pan_angle) + " tilt_angle: " + str(tilt_angle))
+                        kit.servo[pan_channel].angle = pan_angle
+                        kit.servo[tilt_channel].angle = tilt_angle
+                        
+        #                log("cameraEyeMovementTask", "Checking Raise/Lower: Raised? " + str(isBodyRaised()) + " tilt_angle: " + str(tilt_angle))
+                        if(isBodyRaised() and tilt_angle < 92):
+                            tilt_angle += 15
+        #                    log("cameraEyeMovementTask", "Lowering body... tilt_angle going to: " + str(tilt_angle))
+                            kit.servo[tilt_channel].angle = tilt_angle
+                            time.sleep(0.0)
+        #                    log("cameraEyeMovementTask", "completed servo call...")
+                            lowerBody()
+        #                    log("cameraEyeMovementTask", "completed lowerBody() call...")
+                        if(not isBodyRaised() and tilt_angle >125):
+        #                    log("cameraEyeMovementTask", "Raising body... pan_angle going to: " + str(pan_angle))
+                            raiseBody()
+                        time.sleep(0.001) #time between adjustments - .01 makes movement smooth, high values can make movement jumpy
+                    else:
+                        timeSinceLastFacePresent = (datetime.datetime.now() - timeLastFacePresent).total_seconds() * 1000
+                        if debugCameraThread: log("cameraEyeMovementTask", "Lost track of face for " + str(timeSinceLastFacePresent) + "ms")
+                        
+                        if timeSinceLastFacePresent > 10000:
+                            facePresent = False
+                            reset_gpt_session()
+                            pan_angle = defaultPanAngle
+                            tilt_angle = defaultTiltAngle
+                            raiseBody()
+                            kit.servo[pan_channel].angle = pan_angle
+                            kit.servo[tilt_channel].angle = tilt_angle
+                            time.sleep(2.00)                
+                        time.sleep(1.00)                
+                else:
+                    log("cameraEyeMovementTask", "ERROR - frame not captured - will retry on loop...")
+                    
+                    
+                # Exit on 'q'
+    #            if debugCameraThread: log("cameraEyeMovementTask", "check for q")
+#                if cv2.waitKey(1) & 0xFF == ord('q'):
+ #                   break
+
             else:
-                timeSinceLastFacePresent = (datetime.datetime.now() - timeLastFacePresent).total_seconds() * 1000
-                if debugCameraThread: log("cameraEyeMovementTask", "Lost track of face for " + str(timeSinceLastFacePresent) + "ms")
-                
-                if timeSinceLastFacePresent > 10000:
-                    facePresent = False
-                    reset_gpt_session()
-                    pan_angle = defaultPanAngle
-                    tilt_angle = defaultTiltAngle
-                    raiseBody()
-                    kit.servo[pan_channel].angle = pan_angle
-                    kit.servo[tilt_channel].angle = tilt_angle
-                    time.sleep(2.00)                
+                log("cameraEyeMovementTask", "ERROR - camera not captured - re- attempting capture...")
+                cap = cv2.VideoCapture(0)  # Use 0 for the default USB cam
 
-            # Exit on 'q'
-            if debugCameraThread: log("cameraEyeMovementTask", "check for q")
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        #Exception catch
         except Exception as e:
             # Catches any other unexpected exceptions
             print(f"An unexpected error occurred: {e}")
