@@ -310,8 +310,8 @@ def cameraEyeMovementTask():
                     
                     # Show the frame - this will show even with no face present (helps debug and focus camera)
                     #if debugCameraThread: log("cameraEyeMovementTask", "showing image")
-                    #cv2.imshow('Face Tracking', frame)
-                    #cv2.waitKey(1) #NOTE: this line is required to finalize showing the frame - don't know why
+                    cv2.imshow('Face Tracking', frame)
+                    cv2.waitKey(1) #NOTE: this line is required to finalize showing the frame - don't know why
                     
                     # Convert to grayscale (Haar works on gray images)
                     #if debugCameraThread: log("cameraEyeMovementTask", "converting to grayscale.")
@@ -444,7 +444,7 @@ def cameraEyeMovementTask():
                             kit.servo[pan_channel].angle = pan_angle
                             kit.servo[tilt_channel].angle = tilt_angle
                             time.sleep(2.00)                
-                        time.sleep(1.00)                
+                                        
                 else:
                     log("cameraEyeMovementTask", "ERROR - frame not captured - will retry on loop...")
                     
